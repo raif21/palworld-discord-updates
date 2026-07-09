@@ -1,0 +1,42 @@
+name: Palworld Steam to Discord
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-palworld-news:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Check Steam RSS and post to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          FEED_URL: "https://store.steampowered.com/feeds/news/app/1623730/?cc=CA&l=english"
+          ONLY_PATCH_NOTES: "true"
+          SEND_ON_FIRST_RUN: "true"
+        run: python palworld_to_discord.py
+
+      - name: Save latest Steam item
+        run: |
+          if [[ -n $(git status --porcelain .state) ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .state/palworld_last_guid.txt
+            git commit -m "Update Palworld RSS state"
+            git push
+          else
+            echo "No state changes."
+          fi
