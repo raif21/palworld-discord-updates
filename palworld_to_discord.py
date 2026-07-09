@@ -3,6 +3,7 @@ import json
 import os
 import re
 import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 
 FEED_URL = os.getenv(
@@ -84,44 +85,36 @@ def save_last_seen(guid):
     with open(STATE_FILE, "w", encoding="utf-8") as file:
         file.write(guid)
 
-
 def send_to_discord(title, link, description):
-    description = clean_text(description)
-
-    if len(description) > 1000:
-        description = description[:997] + "..."
-
     payload = {
         "username": "Palworld Updates",
-        "content": "📢 **New Palworld Steam update posted!**",
-        "embeds": [
-            {
-                "title": title[:256],
-                "url": link,
-                "description": description or "Click to read the full Steam post.",
-                "footer": {
-                    "text": "Steam News • Palworld"
-                }
-            }
-        ]
+        "content": f"📢 New Palworld Steam post:\n\n{title}\n{link}"
     }
 
     data = json.dumps(payload).encode("utf-8")
 
     request = urllib.request.Request(
-        WEBHOOK_URL,
+        WEBHOOK_URL.strip(),
         data=data,
         headers={
-    "Content-Type": "application/json",
-    "User-Agent": "DiscordBot (palworld-discord-updates, 1.0)"
-},
+            "Content-Type": "application/json",
+            "User-Agent": "palworld-discord-updates/1.0"
+        },
         method="POST"
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        if response.status not in (200, 204):
-            raise RuntimeError(f"Discord webhook failed with status {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            print(f"Discord response status: {response.status}")
+            if response.status not in (200, 204):
+                raise RuntimeError(f"Discord webhook failed with status {response.status}")
 
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        print("Discord rejected the webhook request.")
+        print(f"HTTP status: {error.code}")
+        print(f"Discord response body: {body}")
+        raise
 
 def main():
     feed_data = fetch_feed(FEED_URL)
