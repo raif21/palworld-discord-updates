@@ -12,7 +12,7 @@ FEED_URL = os.getenv(
 
 WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 
-STATE_FILE = ".state/palworld_last_guid.txt"
+STATE_FILE = ".state/palworld_last_seen_any_post.txt"
 
 ONLY_PATCH_NOTES = os.getenv("ONLY_PATCH_NOTES", "true").lower() == "true"
 SEND_ON_FIRST_RUN = os.getenv("SEND_ON_FIRST_RUN", "true").lower() == "true"
@@ -64,14 +64,13 @@ def is_patch_note(title, description):
     if any(keyword in combined for keyword in PATCH_KEYWORDS):
         return True
 
-    # Catches version-style titles like "v0.7.3"
     if re.search(r"\bv?\d+\.\d+(\.\d+)?\b", combined):
         return True
 
     return False
 
 
-def load_last_guid():
+def load_last_seen():
     if not os.path.exists(STATE_FILE):
         return None
 
@@ -79,7 +78,7 @@ def load_last_guid():
         return file.read().strip() or None
 
 
-def save_last_guid(guid):
+def save_last_seen(guid):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
 
     with open(STATE_FILE, "w", encoding="utf-8") as file:
@@ -94,7 +93,7 @@ def send_to_discord(title, link, description):
 
     payload = {
         "username": "Palworld Updates",
-        "content": "📢 **New Palworld Steam patch notes posted!**",
+        "content": "📢 **New Palworld Steam update posted!**",
         "embeds": [
             {
                 "title": title[:256],
@@ -134,8 +133,6 @@ def main():
         print("No feed items found.")
         return
 
-    last_guid = load_last_guid()
-
     parsed_items = []
 
     for item in items:
@@ -153,28 +150,35 @@ def main():
             }
         )
 
-    latest_guid = parsed_items[0]["guid"]
+    newest_any_guid = parsed_items[0]["guid"]
+    last_seen = load_last_seen()
 
-    if last_guid is None:
-        new_items = [parsed_items[0]] if SEND_ON_FIRST_RUN else []
+    if last_seen is None:
+        if SEND_ON_FIRST_RUN:
+            new_items = parsed_items
+        else:
+            new_items = []
     else:
         new_items = []
 
         for item in parsed_items:
-            if item["guid"] == last_guid:
+            if item["guid"] == last_seen:
                 break
             new_items.append(item)
 
-    # Oldest first, so Discord posts in the right order if there are multiple.
-    for item in reversed(new_items[:5]):
+    posted_count = 0
+
+    for item in reversed(new_items[:10]):
         if is_patch_note(item["title"], item["description"]):
             print(f"Posting: {item['title']}")
             send_to_discord(item["title"], item["link"], item["description"])
+            posted_count += 1
         else:
             print(f"Skipping non-patch item: {item['title']}")
 
-    save_last_guid(latest_guid)
-    print("Done.")
+    save_last_seen(newest_any_guid)
+
+    print(f"Done. Posted {posted_count} item(s).")
 
 
 if __name__ == "__main__":
