@@ -111,7 +111,10 @@ def send_to_discord(title, link, description):
     request = urllib.request.Request(
         WEBHOOK_URL,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+    "Content-Type": "application/json",
+    "User-Agent": "DiscordBot (palworld-discord-updates, 1.0)"
+},
         method="POST"
     )
 
